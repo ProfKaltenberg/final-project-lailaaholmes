@@ -1,0 +1,139 @@
+---
+---
+title: "Regression"
+output: html_document
+---
+Downloading the packages and loading them and importing my csv!
+```{r}
+install.packages(c(
+  "dplyr",
+  "tidyverse",
+  "estimatr",
+  "stargazer",
+  "readr",
+  "stringr"
+))
+library(dplyr)
+library(tidyverse)
+library(estimatr)
+library(stargazer)
+library(readr)
+library(stringr)
+
+murder <- read_csv("murderpedia_updated.csv")
+head(murder)
+
+```
+# Next I will be making Gender, Violent, Serial Killer, Shooting, and USA into Binary Variables. I am also converting victim number into a numeric.
+```{r}
+# Male = 1, Female = 0
+murder$male_binary <- ifelse(
+  murder$gender == "Male", 1, 0
+)
+
+# Violent = 1, Non-violent = 0
+murder$violent_binary <- ifelse(
+  murder$violent_vs_nonviolent == "Violent", 1, 0
+)
+
+# Serial killer = 1, Not serial killer = 0
+murder$serial_killer_binary <- ifelse(
+  murder$serial_killer == "Yes", 1, 0
+)
+
+# USA = 1, Non-USA = 0
+murder$usa_binary <- ifelse(
+  murder$usa_location == "USA", 1, 0
+)
+
+# Creating shooting binary variable
+murder$shooting_binary <- ifelse(
+  murder$method == "Shooting", 1, 0
+)
+# Creating numeric victim variable https://www.geeksforgeeks.org/r-language/as-numeric-function-in-r/ 
+murder$victims_num <- as.numeric(
+  str_extract(murder$victims, "\\d+")
+)
+
+head(murder)
+```
+# Regression 1: Violent USA Interaction
+This regression is an OLs model examining whether males are more likely to use violent methods and whether the relationship changes depending on the location.
+```{r}
+reg1 <- lm(violent_binary ~ male_binary * usa_binary, data = murder)
+
+summary(reg1)
+```
+# Regression 2: Male Serial Killer Interaction
+
+This regression is also an OLs and examines whether male serial killers and USA location are associated with using violent methods.
+
+```{r}
+reg2 <- lm(violent_binary ~ male_binary * serial_killer_binary + usa_binary,data = murder)
+
+summary(reg2)
+```
+
+# Regression 3: Shooting Logit Model
+
+This regression estimates the probability of using shooting as a homicide method. Since shooting is a binary outcome (shooting or not shooting), I will be using a Logit Model.
+
+First I need to install the margins package before I run it. 
+After that is done I will run my logit regression and be using the average marginal effects.
+```{r}
+install.packages("margins")
+library(margins)
+
+# Running logit model
+reg3 <- glm(shooting_binary ~ male_binary + usa_binary + serial_killer_binary,data = murder,family = "binomial")
+
+# Average marginal effects
+margins(reg3)
+
+# Marginal effects at USA = 1
+margins(reg3, at = list(usa_binary = 1))
+
+# Marginal effects at USA = 0
+margins(reg3,at = list(usa_binary = 0))
+
+# Regression summary
+summary(reg3)
+```
+Lastly, I will be adding all my regressions into a html table!
+```{r}
+stargazer(
+  reg1, reg2, reg3,
+  
+  type = "html",
+  out = "regression_table.html",
+  
+  title = "Regression Results",
+  
+  column.labels = c(
+    "Violent (USA)",
+    "Violent (Serial Killer)",
+    "Shooting (AME)"
+  ),
+  
+  dep.var.caption = "",
+  dep.var.labels.include = FALSE,
+  
+  covariate.labels = c(
+    "Male",
+    "Serial Killer",
+    "USA",
+    "Male * USA",
+    "Male * Serial Killer"
+  ),
+  
+  model.names = FALSE,
+  
+  digits = 3
+)
+```
+# Results from all regressions 
+The regression results suggest that male offenders were significantly more likely to use violent homicide methods compared to female offenders across all three models. In Regression 1, the coefficient on the male variable was positive and statistically significant, indicating that male offenders had a higher likelihood of committing violent crimes regardless of whether the offender was located in the United States. The interaction term between male offenders and USA location was not statistically significant, suggesting that the relationship between gender and violent methods did not differ between U.S. and non-U.S. offenders.
+
+Regression 2 examined whether the relationship between gender and violent methods differed for serial killers. The male variable again remained positive and statistically significant, showing that male offenders were generally more likely to use violent methods. However, the interaction between male offenders and serial killer status was not statistically significant, indicating that being both male and a serial killer did not increase the likelihood of violent methods beyond the overall gender effect already observed in the data.
+
+Lastly, the logit regression with average marginal effects examined the probability of using shooting as a homicide method. The results showed that male offenders and offenders located in the United States were both significantly more likely to use shooting methods.
